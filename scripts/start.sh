@@ -13,6 +13,7 @@ preflight_checks || exit
 ${DIR}/stop.sh
 
 CLEAN=${CLEAN:-false}
+VIZ=${VIZ:-false}
 
 # Build Kafka Connect image with connector plugins
 build_connect_image
@@ -99,23 +100,6 @@ retry $MAX_WAIT host_check_up connect || exit 1
 
 #-------------------------------------------------------------------------------
 
-echo -e "\nStart streaming from the Wikipedia SSE source connector:"
-${DIR}/connectors/submit_wikipedia_sse_config.sh || exit 1
-
-# Verify connector is running
-MAX_WAIT=120
-echo
-echo "Waiting up to $MAX_WAIT seconds for connector to be in RUNNING state"
-retry $MAX_WAIT check_connector_status_running "wikipedia-sse" || exit 1
-
-# Verify wikipedia.parsed topic is populated and schema is registered
-MAX_WAIT=120
-echo
-echo -e "Waiting up to $MAX_WAIT seconds for subject wikipedia.parsed-value (for topic wikipedia.parsed) to be registered in Schema Registry"
-retry $MAX_WAIT host_check_schema_registered || exit 1
-
-#-------------------------------------------------------------------------------
-
 # Verify Confluent Control Center has started
 MAX_WAIT=300
 echo
@@ -125,7 +109,6 @@ retry $MAX_WAIT host_check_up control-center || exit 1
 echo -e "\nConfluent Control Center modifications:"
 ${DIR}/helper/control-center-modifications.sh
 echo
-
 
 #-------------------------------------------------------------------------------
 
@@ -145,17 +128,6 @@ ${DIR}/ksqlDB/run_ksqlDB.sh
 if [[ "$VIZ" == "true" ]]; then
   build_viz || exit 1
 fi
-
-echo -e "\nStart additional consumers to read from topics WIKIPEDIANOBOT, WIKIPEDIA_COUNT_GT_1"
-${DIR}/consumers/listen_WIKIPEDIANOBOT.sh
-${DIR}/consumers/listen_WIKIPEDIA_COUNT_GT_1.sh
-
-echo
-echo
-echo "Start the Kafka Streams application wikipedia-activity-monitor"
-docker-compose up --no-recreate -d streams-demo
-echo "..."
-
 
 #-------------------------------------------------------------------------------
 
